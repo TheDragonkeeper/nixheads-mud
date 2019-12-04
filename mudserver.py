@@ -1,35 +1,14 @@
-"""Basic MUD server module for creating text-based Multi-User Dungeon
-(MUD) games.
-
-Contains one class, MudServer, which can be instantiated to start a
-server running then used to send and receive messages from players.
-
-author: Mark Frimston - mfrimston@gmail.com
-"""
 
 
-import socket
+import socket, ssl
 import select
 import time
 import sys
 
 
 class MudServer(object):
-    """A basic server for text-based Multi-User Dungeon (MUD) games.
-
-    Once created, the server will listen for players connecting using
-    Telnet. Messages can then be sent to and from multiple connected
-    players.
-
-    The 'update' method should be called in a loop to keep the server
-    running.
-    """
-
-    # An inner class which is instantiated for each connected client to store
-    # info about them
 
     class _Client(object):
-        """Holds information about a connected player"""
 
         # the socket object used to communicate with this client
         socket = None
@@ -83,6 +62,10 @@ class MudServer(object):
         """Constructs the MudServer object and starts listening for
         new players.
         """
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+# context.load_cert_chain('/path/to/certchain.pem', '/path/to/private.key')
+
+
 
         self._clients = {}
         self._nextid = 0
@@ -90,7 +73,7 @@ class MudServer(object):
         self._new_events = []
 
         # create a new tcp socket which will be used to listen for new clients
-        self._listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
 
         # set a special option on the socket which allows the port to be
         # immediately without having to wait
@@ -102,14 +85,16 @@ class MudServer(object):
         # this requires root permissions, so we use a higher arbitrary port
         # number instead: 1234. Address 0.0.0.0 means that we will bind to all
         # of the available network interfaces
-        self._listen_socket.bind(("0.0.0.0", 1234))
+        self._listen_socket.bind(("127.0.0.1", 1234))
 
         # set to non-blocking mode. This means that when we call 'accept', it
         # will return immediately without waiting for a connection
         self._listen_socket.setblocking(False)
 
         # start listening for connections on the socket
-        self._listen_socket.listen(1)
+        self._listen_socket.listen(5)
+        with context.wrap_socket(self._listen_socket, server_side=True) as ssock:
+            conn, addr = ssock.accept()
 
     def update(self):
         """Checks for new players, disconnected players, and new
@@ -138,7 +123,6 @@ class MudServer(object):
         retval = []
         # go through all the events in the main list
         for ev in self._events:
-            # if the event is a new player occurence, add the info to the list
             if ev[0] == self._EVENT_NEW_PLAYER:
                 retval.append(ev[1])
         # return the info list
